@@ -1,0 +1,22 @@
+[project]
+name = "decomp-notes"
+version = "0.1.0"
+description = "Browse an exported Ghidra analysis and explain functions with cited evidence"
+requires-python = ">=3.11"
+license = "MIT"
+
+[project.scripts]
+decomp-notes = "decomp_notes.cli:main"
+
+[tool.setuptools]
+packages = ["decomp_notes"]
+
+[tool.setuptools.package-data]
+decomp_notes = ["ui.html"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["ghidra"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
