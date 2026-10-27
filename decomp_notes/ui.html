@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>decomp-notes</title>
+<style>
+body { margin: 0; font: 14px sans-serif; display: flex; height: 100vh; }
+#side { width: 320px; border-right: 1px solid #ccc; display: flex; flex-direction: column; }
+#side input { margin: 6px; padding: 4px; }
+#list, #hits { overflow: auto; flex: 1; }
+#main { flex: 1; overflow: auto; padding: 12px 18px; }
+.item { padding: 3px 8px; cursor: pointer; font-family: monospace; }
+.item:hover { background: #eef; }
+.ext { color: #888; }
+pre { background: #f6f6f6; padding: 8px; overflow: auto; }
+a { color: #04c; cursor: pointer; }
+.cite { color: #666; font-family: monospace; font-size: 12px; }
+</style>
+<div id="side">
+  <input id="q" placeholder="search functions, addresses, strings">
+  <div id="list"></div>
+</div>
+<div id="main">Pick a function.</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const get = (u) => fetch(u).then((r) => r.json());
+
+function el(tag, props, ...kids) {
+  const e = Object.assign(document.createElement(tag), props || {});
+  for (const k of kids) e.append(k);
+  return e;
+}
+
+function fnLink(f) {
+  return el("a", { textContent: f.name + " " + f.address, onclick: () => show(f.address) });
+}
+
+function linkList(title, items) {
+  const box = el("div", {}, el("h4", { textContent: title }));
+  if (!items.length) box.append(el("i", { textContent: "none" }));
+  for (const f of items) box.append(el("div", {}, fnLink(f)));
+  return box;
+}
+
+async function show(id) {
+  const d = await get("/api/function?id=" + encodeURIComponent(id));
+  const main = $("#main");
+  main.replaceChildren(el("h2", { textContent: d.name + " @ " + d.address }));
+  main.append(el("div", { className: "cite", textContent: "hash " + d.body_hash.slice(0, 16) + ", " + d.size + " bytes" }));
+  main.append(el("pre", { textContent: d.external ? "(external)" : (d.signature + "\n\n" + d.decompiled) }));
+  main.append(linkList("Callers", d.callers), linkList("Callees", d.callees));
+  const strs = el("div", {}, el("h4", { textContent: "Strings" }));
+  for (const s of d.strings) strs.append(el("div", { textContent: s.address + "  " + JSON.stringify(s.value) }));
+  main.append(strs);
+  const box = el("div", {}, el("h4", { textContent: "Explanation" }));
+  main.append(box);
+  const x = await get("/api/explain?id=" + encodeURIComponent(d.address));
+  box.append(el("div", { className: "cite", textContent: "source: " + x.source + (x.note ? " (" + x.note + ")" : "") }));
+  for (const c of x.claims) {
+    box.append(el("p", { textContent: c.text }, el("span", { className: "cite", textContent: "  [" + c.cites.join(", ") + "]" })));
+  }
+}
+
+async function refresh() {
+  const q = $("#q").value;
+  const list = $("#list");
+  list.replaceChildren();
+  if (!q) {
+    for (const f of await get("/api/functions")) list.append(row(f));
+    return;
+  }
+  const r = await get("/api/search?q=" + encodeURIComponent(q));
+  for (const f of r.functions) list.append(row(f));
+  for (const s of r.strings) {
+    const d = el("div", { className: "item", textContent: s.address + " " + JSON.stringify(s.value) });
+    for (const f of s.functions) d.append(el("div", {}, fnLink(f)));
+    list.append(d);
+  }
+}
+
+function row(f) {
+  return el("div", {
+    className: "item" + (f.external ? " ext" : ""),
+    textContent: f.address + " " + f.name,
+    onclick: () => show(f.address),
+  });
+}
+
+$("#q").addEventListener("input", refresh);
+refresh();
+</script>
